@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Scan Kamera – Absensi</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"
+  onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/jsqr@1.4.0/dist/jsQR.js';document.head.appendChild(s);})()"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;}
+.wrap{max-width:420px;margin:0 auto;background:#fff;min-height:100vh;display:flex;flex-direction:column;}
+
+/* HEADER */
+.hdr{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 12px 10px;text-align:center;flex-shrink:0;}
+.hdr h2{font-size:1.1rem;font-weight:800;}
+.hdr small{font-size:0.78rem;opacity:.85;}
+#schClock{font-size:.82rem;margin-top:4px;letter-spacing:1px;}
+#engineBadge{display:inline-block;font-size:.7rem;padding:2px 10px;border-radius:20px;margin-top:4px;background:rgba(255,255,255,.2);}
+
+/* URL CONFIG */
+#cfgBox{padding:12px 14px;background:#f0f4ff;border-bottom:2px solid #667eea;}
+#cfgBox label{font-weight:700;font-size:.82rem;color:#667eea;display:block;margin-bottom:4px;}
+#cfgBox input{width:100%;padding:8px 10px;border:2px solid #c5cff0;border-radius:8px;font-size:.82rem;outline:none;}
+#cfgBox input:focus{border-color:#667eea;}
+#btnSaveUrl{width:100%;margin-top:6px;padding:9px;border:none;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:700;cursor:pointer;font-size:.85rem;}
+#cfgInfo{font-size:.75rem;color:#888;margin-top:5px;line-height:1.5;}
+
+/* STATUS */
+#camStatus{padding:10px 14px;font-weight:700;font-size:.9rem;text-align:center;border-bottom:1px solid #eee;line-height:1.6;transition:all .3s;}
+
+/* VIEWFINDER */
+.vf-wrap{position:relative;width:100%;background:#000;flex:0 0 auto;}
+.vf-wrap video{width:100%;display:block;max-height:52vh;object-fit:cover;}
+.cam-ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#111;color:#555;}
+.cam-ph i{font-size:3rem;opacity:.15;margin-bottom:10px;}
+.cam-ph p{font-size:.88rem;opacity:.4;}
+#scanOverlay{display:none;position:absolute;inset:0;pointer-events:none;}
+.corner{position:absolute;width:30px;height:30px;}
+.c-tl{top:50%;left:50%;transform:translate(calc(-50% - 65px),calc(-50% - 65px));border-top:3px solid #38ef7d;border-left:3px solid #38ef7d;border-radius:3px 0 0 0;}
+.c-tr{top:50%;left:50%;transform:translate(calc(-50% + 35px),calc(-50% - 65px));border-top:3px solid #38ef7d;border-right:3px solid #38ef7d;border-radius:0 3px 0 0;}
+.c-bl{top:50%;left:50%;transform:translate(calc(-50% - 65px),calc(-50% + 35px));border-bottom:3px solid #38ef7d;border-left:3px solid #38ef7d;border-radius:0 0 0 3px;}
+.c-br{top:50%;left:50%;transform:translate(calc(-50% + 35px),calc(-50% + 35px));border-bottom:3px solid #38ef7d;border-right:3px solid #38ef7d;border-radius:0 0 3px 0;}
+.scan-line{position:absolute;left:50%;top:50%;transform:translate(-65px,-65px);width:130px;height:2px;background:linear-gradient(90deg,transparent,#38ef7d,transparent);animation:scanMove 1.5s ease-in-out infinite;}
+@keyframes scanMove{0%{transform:translate(-65px,-65px);}50%{transform:translate(-65px,65px);}51%{opacity:0;}100%{transform:translate(-65px,-65px);opacity:0;}}
+#flashOK{display:none;position:absolute;inset:0;background:rgba(56,239,125,.25);animation:flash .4s ease-out;}
+@keyframes flash{0%{opacity:1;}100%{opacity:0;}}
+canvas{display:none;}
+
+/* COOLDOWN */
+#cdBar{height:4px;background:#eee;display:none;}
+#cdFill{height:100%;width:100%;background:linear-gradient(90deg,#667eea,#764ba2);}
+
+/* RESULT */
+#resCard{display:none;margin:0;padding:10px 16px;border-left:5px solid #11998e;background:#d4edda;color:#155724;}
+#resCard.warn{background:#fff3cd;color:#856404;border-left-color:#F7971E;}
+#resCard.err{background:#f8d7da;color:#721c24;border-left-color:#dc3545;}
+.rc-status{font-size:1.05rem;font-weight:800;}
+.rc-nama{font-weight:700;font-size:.93rem;margin-top:2px;}
+.rc-msg{font-size:.8rem;color:#555;margin-top:2px;}
+
+/* CONTROLS */
+.controls{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #eee;flex-shrink:0;}
+.btn{flex:1;padding:11px 6px;font-weight:700;font-size:.86rem;border-radius:10px;border:none;cursor:pointer;transition:.2s;}
+.btn-start{background:linear-gradient(135deg,#11998e,#38ef7d);color:#fff;}
+.btn-stop{background:linear-gradient(135deg,#f36d6d,#ef903c);color:#fff;}
+.btn-stop:disabled,.btn-start:disabled{background:#ddd;color:#aaa;cursor:not-allowed;}
+.btn-cfg{flex:0 0 42px;background:#f0f0f0;color:#667eea;border-radius:10px;font-size:.9rem;}
+
+/* CAM PICK */
+#pickWrap{display:none;padding:10px 14px;background:#f8f9ff;border-bottom:1px solid #eee;}
+#pickWrap label{font-weight:700;font-size:.82rem;color:#667eea;display:block;margin-bottom:4px;}
+#camPick{width:100%;padding:7px;border:2px solid #667eea;border-radius:8px;font-size:.88rem;}
+#btnPickCam{width:100%;margin-top:6px;padding:9px;border:none;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:700;cursor:pointer;}
+
+/* LOG */
+.log-box{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.log-hdr{padding:8px 14px;font-weight:700;font-size:.83rem;color:#667eea;background:#f8f9ff;border-top:1px solid #eee;border-bottom:1px solid #eee;}
+#logList{overflow-y:auto;padding:4px 10px;max-height:160px;}
+.log-row{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid #f5f5f5;font-size:.85rem;}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.tips{padding:10px 14px 14px;font-size:.78rem;color:#888;line-height:1.7;flex-shrink:0;}
+.tips b{color:#667eea;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <h2><i class="fas fa-qrcode"></i> <span id="schName">SCAN ABSENSI</span></h2>
+    <small>Scan QR / Barcode Kamera Live</small>
+    <div id="schClock">--:--:--</div>
+    <div id="engineBadge">⚙ Mendeteksi mesin scan...</div>
+  </div>
+
+  <!-- URL CONFIG -->
+  <div id="cfgBox">
+    <label><i class="fas fa-link"></i> URL Google Apps Script:</label>
+    <input type="url" id="gasUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    <button id="btnSaveUrl" onclick="saveUrl()"><i class="fas fa-save"></i> SIMPAN & TEST KONEKSI</button>
+    <div id="cfgInfo">Isi URL Apps Script sekali saja, lalu tekan Simpan.</div>
+  </div>
+
+  <div id="camStatus" style="background:#e8f0fe;color:#1a6fa0;">
+    <i class="fas fa-info-circle"></i> Isi URL Apps Script di atas lalu aktifkan kamera
+  </div>
+
+  <div id="pickWrap">
+    <label><i class="fas fa-video"></i> Pilih Kamera:</label>
+    <select id="camPick"></select>
+    <button id="btnPickCam" onclick="startWithPicked()"><i class="fas fa-play"></i> GUNAKAN KAMERA INI</button>
+  </div>
+
+  <div class="vf-wrap">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="cam-ph" id="camPH">
+      <i class="fas fa-camera"></i>
+      <p>Kamera belum aktif</p>
+    </div>
+    <div id="scanOverlay">
+      <div class="corner c-tl"></div><div class="corner c-tr"></div>
+      <div class="corner c-bl"></div><div class="corner c-br"></div>
+      <div class="scan-line"></div>
+    </div>
+    <div id="flashOK"></div>
+  </div>
+
+  <div id="cdBar"><div id="cdFill"></div></div>
+  <div id="resCard">
+    <div class="rc-status" id="rcSt"></div>
+    <div class="rc-nama"   id="rcNm"></div>
+    <div class="rc-msg"    id="rcMsg"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-start" id="btnStart" onclick="startCamera()">
+      <i class="fas fa-play"></i> AKTIFKAN
+    </button>
+    <button class="btn btn-stop" id="btnStop" onclick="stopCamera()" disabled>
+      <i class="fas fa-stop"></i> STOP
+    </button>
+    <button class="btn btn-cfg" onclick="toggleCfg()" title="Pengaturan URL">
+      <i class="fas fa-cog"></i>
+    </button>
+  </div>
+
+  <div class="log-box">
+    <div class="log-hdr"><i class="fas fa-history"></i> Log Scan Sesi Ini</div>
+    <div id="logList"><div style="text-align:center;color:#bbb;padding:14px;font-size:.83rem;">Belum ada scan</div></div>
+  </div>
+
+  <div class="tips">
+    <b>💡 Cara pakai:</b> Isi URL GAS sekali → Simpan → Aktifkan kamera → Scan QR.<br>
+    <b>📁 File ini</b> bisa dibuka langsung dari folder — tidak perlu internet untuk tampilan.<br>
+    <b>⚡ BarcodeDetector</b> (Chrome/Android) jauh lebih cepat dari jsQR.
+  </div>
+
+</div>
+<script>
+// ═══ CONFIG ══════════════════════════════════
+var GAS_URL = localStorage.getItem('gas_url') || '';
+var CLR = {Hadir:'#11998e',Terlambat:'#FF512F',Pulang:'#8E2DE2'};
+var ST  = {
+  stream:null, scanning:false, rafId:null, bdInterval:null,
+  inProgress:false, lastCode:'', lastTs:0, COOL:1800,
+  logs:[], cdTimer:null, engine:'none'
+};
+
+// ═══ INIT ════════════════════════════════════
+window.addEventListener('load', function(){
+  // Isi input URL dari localStorage
+  if (GAS_URL) {
+    document.getElementById('gasUrl').value = GAS_URL;
+    document.getElementById('cfgBox').style.display = 'none';
+    loadSchoolName();
+    setStatus('<i class="fas fa-check-circle" style="color:#28a745"></i> URL tersimpan. Tekan <b>AKTIFKAN</b>.','#d4edda','#155724');
+  }
+
+  // Deteksi engine
+  var badge = document.getElementById('engineBadge');
+  if ('BarcodeDetector' in window) {
+    ST.engine = 'native';
+    badge.innerHTML = '⚡ Native BarcodeDetector (Cepat)';
+    badge.style.background = 'rgba(56,239,125,.3)';
+  } else if (typeof jsQR !== 'undefined') {
+    ST.engine = 'jsqr';
+    badge.innerHTML = '📦 jsQR Library';
+  } else {
+    badge.innerHTML = '⏳ Memuat library...';
+    var w = setInterval(function(){
+      if (typeof jsQR !== 'undefined') {
+        clearInterval(w); ST.engine='jsqr';
+        badge.innerHTML = '📦 jsQR Library';
+      }
+    }, 300);
+  }
+
+  // Clock
+  setInterval(function(){
+    var d=new Date();
+    document.getElementById('schClock').textContent =
+      pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  }, 1000);
+});
+
+function toggleCfg() {
+  var box = document.getElementById('cfgBox');
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+}
+
+// ═══ SAVE & TEST URL ════════════════════════
+function saveUrl() {
+  var url = document.getElementById('gasUrl').value.trim();
+  if (!url || !url.startsWith('http')) {
+    document.getElementById('cfgInfo').innerHTML = '<span style="color:red">⚠ URL tidak valid!</span>';
+    return;
+  }
+  GAS_URL = url;
+  localStorage.setItem('gas_url', url);
+  document.getElementById('cfgInfo').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing koneksi...';
+
+  fetch(GAS_URL + '?action=info')
+    .then(function(r){ return r.json(); })
+    .then(function(info){
+      document.getElementById('cfgInfo').innerHTML =
+        '✅ Terhubung! Waktu server: <b>'+info.waktuServer+'</b> | Jadwal masuk: '+info.jadwal.masuk+' pulang: '+info.jadwal.pulang;
+      if (info.namaSekolah) document.getElementById('schName').textContent = info.namaSekolah;
+      document.getElementById('cfgBox').style.display = 'none';
+      setStatus('<i class="fas fa-check-circle" style="color:#28a745"></i> Terhubung ke server. Tekan <b>AKTIFKAN</b>.','#d4edda','#155724');
+    })
+    .catch(function(e){
+      document.getElementById('cfgInfo').innerHTML =
+        '<span style="color:red">❌ Gagal konek: '+e.message+'<br>Pastikan URL benar & sudah di-deploy ulang GAS.</span>';
+    });
+}
+
+function loadSchoolName() {
+  if (!GAS_URL) return;
+  fetch(GAS_URL + '?action=info')
+    .then(function(r){ return r.json(); })
+    .then(function(info){
+      if (info.namaSekolah) document.getElementById('schName').textContent = info.namaSekolah;
+    }).catch(function(){});
+}
+
+// ═══ UI HELPERS ══════════════════════════════
+function pad(n){ return String(n).padStart(2,'0'); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function setStatus(html,bg,col){
+  var e=document.getElementById('camStatus');
+  e.innerHTML=html; e.style.background=bg||'#e8f0fe'; e.style.color=col||'#1a6fa0';
+}
+function showResult(stHtml,nama,msg,type){
+  var c=document.getElementById('resCard');
+  c.className=type||''; c.style.display='block';
+  document.getElementById('rcSt').innerHTML=stHtml;
+  document.getElementById('rcNm').textContent=nama;
+  document.getElementById('rcMsg').textContent=msg;
+  clearTimeout(c._t); c._t=setTimeout(function(){c.style.display='none';},4000);
+}
+function flashGreen(){
+  var f=document.getElementById('flashOK');
+  f.style.display='block'; setTimeout(function(){f.style.display='none';},400);
+}
+function addLog(nama,status,jam){
+  ST.logs.unshift({nama:nama,status:status,jam:jam});
+  if(ST.logs.length>30) ST.logs.pop();
+  var h=ST.logs.map(function(l){
+    var c=CLR[l.status]||'#667eea';
+    return '<div class="log-row">'+
+      '<div class="dot" style="background:'+c+'"></div>'+
+      '<div style="flex:1;font-weight:600;">'+esc(l.nama)+'</div>'+
+      '<div style="color:'+c+';font-weight:700;font-size:.8rem;">'+esc(l.status)+'</div>'+
+      '<div style="color:#aaa;font-size:.76rem;margin-left:4px;">'+l.jam+'</div>'+
+      '</div>';
+  }).join('');
+  document.getElementById('logList').innerHTML = h || '<div style="text-align:center;color:#bbb;padding:14px;font-size:.83rem;">Belum ada scan</div>';
+}
+function cooldownBar(ms){
+  var b=document.getElementById('cdBar'),f=document.getElementById('cdFill');
+  b.style.display='block'; f.style.transition='none'; f.style.width='100%'; f.offsetWidth;
+  f.style.transition='width '+ms+'ms linear'; f.style.width='0%';
+  clearTimeout(ST.cdTimer); ST.cdTimer=setTimeout(function(){b.style.display='none';},ms+100);
+}
+function beep(freq){
+  try{
+    var ctx=new(window.AudioContext||window.webkitAudioContext)();
+    var o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=freq||1000; o.type='sine';
+    g.gain.setValueAtTime(0.35,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.18);
+    o.start(); o.stop(ctx.currentTime+0.18);
+  }catch(e){}
+}
+
+// ═══ CAMERA START ════════════════════════════
+function startCamera(){
+  if (!GAS_URL) {
+    document.getElementById('cfgBox').style.display = 'block';
+    setStatus('⚠️ Isi URL Google Apps Script dulu!','#fff3cd','#856404');
+    return;
+  }
+  if (ST.scanning) return;
+  document.getElementById('btnStart').disabled = true;
+  setStatus('<i class="fas fa-spinner fa-spin"></i> Membuka kamera...','#fff3cd','#856404');
+
+  var list = [
+    {video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false},
+    {video:{facingMode:'environment'},audio:false},
+    {video:{width:{ideal:1280},height:{ideal:720}},audio:false},
+    {video:true,audio:false}
+  ];
+  _tryOpen(list, 0);
+}
+function _tryOpen(list,idx){
+  if(idx>=list.length){ handleCamError(new Error('NotAllowed')); return; }
+  navigator.mediaDevices.getUserMedia(list[idx])
+    .then(function(stream){
+      navigator.mediaDevices.enumerateDevices().then(function(devs){
+        var cams=devs.filter(function(d){return d.kind==='videoinput'&&d.label;});
+        if(cams.length>1){
+          stream.getTracks().forEach(function(t){t.stop();});
+          var sel=document.getElementById('camPick'); sel.innerHTML='';
+          cams.forEach(function(d,i){
+            var o=document.createElement('option');
+            o.value=d.deviceId; o.textContent=d.label||('Kamera '+(i+1)); sel.appendChild(o);
+          });
+          var bi=cams.findIndex(function(d){
+            var l=(d.label||'').toLowerCase();
+            return l.indexOf('back')!==-1||l.indexOf('rear')!==-1||l.indexOf('environment')!==-1||l.indexOf('usb')!==-1;
+          });
+          if(bi>=0) sel.selectedIndex=bi;
+          document.getElementById('pickWrap').style.display='block';
+          document.getElementById('btnStart').disabled=false;
+          setStatus('📷 '+cams.length+' kamera — pilih lalu tekan tombol','rgba(102,126,234,.1)','#667eea');
+        } else {
+          attachStream(stream);
+        }
+      }).catch(function(){ attachStream(stream); });
+    })
+    .catch(function(err){
+      var m=err?String(err):'';
+      if(/NotAllowed|denied|Permission/i.test(m)){ handleCamError(err); return; }
+      _tryOpen(list,idx+1);
+    });
+}
+function startWithPicked(){
+  var id=document.getElementById('camPick').value; if(!id) return;
+  document.getElementById('pickWrap').style.display='none';
+  document.getElementById('btnStart').disabled=true;
+  navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:id},width:{ideal:1280},height:{ideal:720}},audio:false})
+    .then(attachStream)
+    .catch(function(){
+      navigator.mediaDevices.getUserMedia({video:{deviceId:id},audio:false})
+        .then(attachStream).catch(handleCamError);
+    });
+}
+function attachStream(stream){
+  ST.stream=stream;
+  var v=document.getElementById('video');
+  v.srcObject=stream;
+  v.onloadedmetadata=function(){
+    v.play().then(function(){
+      document.getElementById('camPH').style.display='none';
+      document.getElementById('scanOverlay').style.display='block';
+      document.getElementById('btnStart').disabled=true;
+      document.getElementById('btnStop').disabled=false;
+      ST.scanning=true; ST.inProgress=false;
+      setStatus('<i class="fas fa-camera" style="color:#28a745"></i> 📷 LIVE — arahkan ke QR/Barcode','#d4edda','#155724');
+      startEngine();
+    }).catch(handleCamError);
+  };
+}
+function handleCamError(err){
+  document.getElementById('btnStart').disabled=false;
+  var m=err?String(err):'';
+  if(/NotAllowed|denied|Permission/i.test(m)){
+    setStatus(
+      '❌ <b>Izin kamera ditolak.</b><br>'+
+      '① Klik ikon 📷 di address bar browser<br>'+
+      '② Pilih <b>Allow / Izinkan</b><br>'+
+      '③ Klik <b>AKTIFKAN</b> lagi',
+      '#f8d7da','#721c24');
+  } else if(/NotReadable|TrackStartError/i.test(m)){
+    setStatus('❌ Kamera dipakai app lain. Tutup dulu lalu klik AKTIFKAN.','#f8d7da','#721c24');
+  } else {
+    setStatus('❌ Gagal buka kamera: '+esc(m),'#f8d7da','#721c24');
+  }
+}
+
+// ═══ CAMERA STOP ═════════════════════════════
+function stopCamera(){
+  ST.scanning=false; ST.inProgress=false;
+  if(ST.rafId) cancelAnimationFrame(ST.rafId);
+  if(ST.bdInterval) clearInterval(ST.bdInterval);
+  ST.rafId=null; ST.bdInterval=null;
+  if(ST.stream) ST.stream.getTracks().forEach(function(t){t.stop();});
+  ST.stream=null; ST.lastCode='';
+  document.getElementById('video').srcObject=null;
+  document.getElementById('camPH').style.display='flex';
+  document.getElementById('scanOverlay').style.display='none';
+  document.getElementById('cdBar').style.display='none';
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStop').disabled=true;
+  setStatus('⏹️ Kamera dimatikan','rgba(102,126,234,.1)','#667eea');
+}
+
+// ═══ SCAN ENGINE ═════════════════════════════
+function startEngine(){
+  if('BarcodeDetector' in window){
+    BarcodeDetector.getSupportedFormats().then(function(fmts){
+      var want=['qr_code','code_128','code_39','ean_13','ean_8','upc_a','upc_e'];
+      var use=fmts.filter(function(f){return want.indexOf(f)!==-1;})||['qr_code'];
+      var bd=new BarcodeDetector({formats:use});
+      var v=document.getElementById('video');
+      ST.bdInterval=setInterval(function(){
+        if(!ST.scanning||ST.inProgress) return;
+        bd.detect(v).then(function(codes){
+          if(codes.length>0) onDetect(codes[0].rawValue);
+        }).catch(function(){});
+      },80);
+    }).catch(function(){useJsQR();});
+  } else { useJsQR(); }
+}
+function useJsQR(){
+  var v=document.getElementById('video'),cv=document.getElementById('canvas');
+  function loop(){
+    if(!ST.scanning) return;
+    if(v.readyState>=v.HAVE_ENOUGH_DATA&&!ST.inProgress){
+      var scale=Math.min(1,480/Math.max(v.videoWidth,1));
+      cv.width=Math.max(1,Math.floor(v.videoWidth*scale));
+      cv.height=Math.max(1,Math.floor(v.videoHeight*scale));
+      var ctx=cv.getContext('2d');
+      ctx.drawImage(v,0,0,cv.width,cv.height);
+      var img=ctx.getImageData(0,0,cv.width,cv.height);
+      var code=null;
+      try{
+        code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+        if(!code) code=jsQR(img.data,img.width,img.height,{inversionAttempts:'onlyInvert'});
+      }catch(e){}
+      if(code&&code.data&&code.data.trim()) onDetect(code.data.trim());
+    }
+    ST.rafId=requestAnimationFrame(loop);
+  }
+  ST.rafId=requestAnimationFrame(loop);
+}
+
+// ═══ ON DETECT ═══════════════════════════════
+function onDetect(raw){
+  var now=Date.now();
+  if(raw===ST.lastCode&&(now-ST.lastTs)<ST.COOL) return;
+  if(ST.inProgress) return;
+  var nis=raw.replace(/\D/g,'');
+  if(nis.length<3) return;
+
+  ST.lastCode=raw; ST.lastTs=now; ST.inProgress=true;
+  beep(1100); flashGreen(); cooldownBar(ST.COOL);
+  setStatus('<i class="fas fa-spinner fa-spin"></i> Memproses: <b>'+esc(nis)+'</b>...','#fff3cd','#856404');
+
+  // Kirim ke GAS via fetch — BUKAN google.script.run
+  fetch(GAS_URL+'?action=scan&nis='+encodeURIComponent(nis)+'&time='+Date.now())
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    })
+    .then(function(res){
+      ST.inProgress=false;
+      var jam=pad(new Date().getHours())+':'+pad(new Date().getMinutes())+':'+pad(new Date().getSeconds());
+      if(res.success){
+        var lb={Hadir:'✅ HADIR',Terlambat:'⏰ TERLAMBAT',Pulang:'🏃 PULANG'};
+        var lbl=lb[res.status]||'✅ '+res.status;
+        showResult(lbl,res.nama,res.msg+' • '+jam,'');
+        setStatus(lbl+' <b>'+esc(res.nama)+'</b>','#d4edda','#155724');
+        addLog(res.nama,res.status,jam);
+        beep(res.status==='Terlambat'?550:1400);
+      } else {
+        showResult('⚠️ '+esc(res.nama),'',res.msg,'warn');
+        setStatus('⚠️ '+esc(res.nama)+': '+esc(res.msg),'#fff3cd','#856404');
+        beep(400);
+      }
+      setTimeout(function(){
+        if(ST.scanning) setStatus('<i class="fas fa-camera" style="color:#28a745"></i> 📷 LIVE — scan berikutnya','#d4edda','#155724');
+      },ST.COOL+150);
+    })
+    .catch(function(err){
+      ST.inProgress=false;
+      showResult('❌ Error','','Gagal konek ke server: '+err.message,'err');
+      setStatus('❌ Gagal: '+esc(err.message),'#f8d7da','#721c24');
+      setTimeout(function(){
+        if(ST.scanning) setStatus('<i class="fas fa-camera"></i> 📷 LIVE — coba scan lagi','#d4edda','#155724');
+      },3000);
+    });
+}
+</script>
+</body>
+</html>
